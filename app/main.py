@@ -1,18 +1,20 @@
-from services.get_user_top_following_accounts import get_user_top_following_accounts
-from services.get_user_medias import get_user_medias
+from fastapi import FastAPI
+from controllers import user_profile
+from fastapi.middleware.cors import CORSMiddleware
 
-""" local variables """
-user_ids = ["17368259", "1681595742018756608"]
+app = FastAPI()
+
+app.include_router(user_profile.router)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 
-def main():
-    for user_id in user_ids:
-        all_user_medias = get_user_medias(user_id)
-        print(all_user_medias)
-
-        all_following_accounts = get_user_top_following_accounts(user_id)
-        print(all_following_accounts)
-
-
-if __name__ == "__main__":
-    main()
+@app.get("/")
+async def root():
+    return {"message": "Hello Bigger Applications!"}
