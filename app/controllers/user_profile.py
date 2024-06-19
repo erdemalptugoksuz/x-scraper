@@ -7,7 +7,7 @@ from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from dotenv import load_dotenv
 
-from models.request_model import RequestModel
+from models.request_models import IdRequestModel, UrlRequestModel
 
 router = APIRouter()
 
@@ -22,7 +22,7 @@ X_USER_MEDIA_API_ENDPOINT = os.getenv('X_USER_MEDIA_API_ENDPOINT')
 
 
 @router.get("/user/top-following-accounts")
-async def get_user_top_following_accounts(request: Request, payload: RequestModel):
+async def get_user_top_following_accounts(request: Request, payload: IdRequestModel):
     user_ids = payload.user_ids
     all_following_accounts = []
 
@@ -102,10 +102,11 @@ async def get_user_top_following_accounts(request: Request, payload: RequestMode
     return JSONResponse(content=all_following_accounts, status_code=status.HTTP_200_OK)
 
 
-@router.get("/user/get_user_medias")
-async def get_user_medias(request: Request, payload: RequestModel):
+@router.get("/user/get-user-medias")
+async def get_user_medias(request: Request, payload: IdRequestModel):
     user_ids = payload.user_ids
     all_medias = []
+    user_screen_name = None
 
     for user_id in user_ids:
         user_medias = []
@@ -145,6 +146,9 @@ async def get_user_medias(request: Request, payload: RequestModel):
                                                       "withClientEventToken": False, "withBirdwatchNotes": False, "withVoice": True, "withV2Timeline": True, "cursor": bottom_cursor})
 
                     for media in medias:
+                        user_screen_name = media.get("item", None).get("itemContent", None).get(
+                            "tweet_results", None).get("result", None).get("core", None).get("user_results", None).get("result", None).get("legacy", None).get("screen_name", None)
+
                         media = media.get("item", None).get("itemContent", None).get(
                             "tweet_results", None).get("result", None).get("legacy", None).get("entities", None).get("media", None)
                         if media is not None:
@@ -153,6 +157,9 @@ async def get_user_medias(request: Request, payload: RequestModel):
                             continue
 
                         media_type = media.get("type", None)
+                        if media_type == "animated_gif":
+                            continue
+
                         media_url = None
 
                         if media_type is not None and media_type == "video":
@@ -166,15 +173,63 @@ async def get_user_medias(request: Request, payload: RequestModel):
                             "media_url": media_url
                         })
 
-                    all_medias.append({
-                        "user_id": user_id,
-                        "medias": user_medias
-                    })
-
                 else:
                     print(f"Error: {response.status_code}")
 
         except Exception as e:
             print(f"Error: {e}")
 
+        all_medias.append({
+            "user_screen_name": user_screen_name,
+            "user_id": user_id,
+            "medias": user_medias
+        })
+
     return JSONResponse(content=all_medias, status_code=status.HTTP_200_OK)
+
+
+@router.get("/user/download-user-medias")
+async def download_user_medias(request: Request, payload: UrlRequestModel):
+    users = payload.users
+
+    for user in users:
+        user_screen_name = user.get("user_screen_name", None)
+        user_id = user.get("user_id", None)
+        user_medias = user.get("medias", None)
+        photo_count = 0
+        video_count = 0
+
+        for media in user_medias:
+            media_type = media.get("media_type", None)
+            media_url = media.get("media_url", None)
+            if media_type == "photo":
+                photo_count += 1
+            if media_type == "video":
+                video_count += 1
+
+            try:
+                response = requests.get(media_url, stream=True)
+
+                if response.status_code == 200:
+                    if not os.path.exists("medias"):
+                        os.makedirs("medias")
+
+                    if not os.path.exists(f"medias/{user_screen_name}"):
+                        os.makedirs(f"medias/{user_screen_name}")
+                        os.makedirs(
+                            f"medias/{user_screen_name}/{user_screen_name}_X_Photos")
+                        os.makedirs(
+                            f"medias/{user_screen_name}/{user_screen_name}_X_Videos")
+
+                    if media_type == "video":
+                        with open(f"medias/{user_screen_name}/{user_screen_name}_X_Videos/{user_screen_name}_X_Vid_{video_count}.mp4", "wb") as file:
+                            for chunk in response.iter_content(chunk_size=1024):
+                                file.write(chunk)
+                    elif media_type == "photo":
+                        with open(f"medias/{user_screen_name}/{user_screen_name}_X_Photos/{user_screen_name}_X_Pic_{photo_count}.jpg", "wb") as file:
+                            file.write(response.content)
+
+            except Exception as e:
+                print(f"Error: {e}")
+
+    return JSONResponse(content={"message": "Medias downloaded successfully"}, status_code=status.HTTP_200_OK)

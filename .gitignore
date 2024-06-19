@@ -166,3 +166,4 @@ cython_debug/
 .env
 .devcontainer
 .github
+medias/
