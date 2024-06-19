@@ -151,27 +151,27 @@ async def get_user_medias(request: Request, payload: IdRequestModel):
 
                         media = media.get("item", None).get("itemContent", None).get(
                             "tweet_results", None).get("result", None).get("legacy", None).get("entities", None).get("media", None)
-                        if media is not None:
-                            media = media[0]
-                        else:
+                        if media is None:
                             continue
 
-                        media_type = media.get("type", None)
-                        if media_type == "animated_gif":
-                            continue
+                        for media_item in media:
+                            media_type = media_item.get("type", None)
+                            if media_type == "animated_gif":
+                                continue
 
-                        media_url = None
+                            media_url = None
 
-                        if media_type is not None and media_type == "video":
-                            media_url = media.get("video_info", None).get(
-                                "variants", None)[-1].get("url", None)
-                        elif media_type is not None and media_type == "photo":
-                            media_url = media.get("media_url_https", None)
+                            if media_type is not None and media_type == "video":
+                                media_url = media_item.get("video_info", None).get(
+                                    "variants", None)[-1].get("url", None)
+                            elif media_type is not None and media_type == "photo":
+                                media_url = media_item.get(
+                                    "media_url_https", None)
 
-                        user_medias.append({
-                            "media_type": media_type,
-                            "media_url": media_url
-                        })
+                            user_medias.append({
+                                "media_type": media_type,
+                                "media_url": media_url
+                            })
 
                 else:
                     print(f"Error: {response.status_code}")
@@ -179,11 +179,12 @@ async def get_user_medias(request: Request, payload: IdRequestModel):
         except Exception as e:
             print(f"Error: {e}")
 
-        all_medias.append({
-            "user_screen_name": user_screen_name,
-            "user_id": user_id,
-            "medias": user_medias
-        })
+        finally:
+            all_medias.append({
+                "user_screen_name": user_screen_name,
+                "user_id": user_id,
+                "medias": user_medias
+            })
 
     return JSONResponse(content=all_medias, status_code=status.HTTP_200_OK)
 
